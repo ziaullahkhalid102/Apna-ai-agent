@@ -1,0 +1,74 @@
+version: "3.9"
+
+services:
+  # ── Backend Orchestrator ──
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: agent-backend
+    ports:
+      - "8000:8000"
+    environment:
+      - AGENT_OLLAMA_BASE_URL=http://ollama:11434
+      - AGENT_OLLAMA_MODEL=llama3.1:8b
+      - AGENT_BROWSER_HEADLESS=true
+      - AGENT_DEBUG=true
+      - AGENT_VAULT_DB_PATH=/data/vault.db
+      - AGENT_VAULT_KEY_PATH=/data/vault.key
+    volumes:
+      - vault-data:/data
+      - screenshots:/tmp/agent-screenshots
+    depends_on:
+      - ollama
+    networks:
+      - agent-net
+    restart: unless-stopped
+
+  # ── Ollama (Local LLM) ──
+  ollama:
+    image: ollama/ollama:latest
+    container_name: agent-ollama
+    ports:
+      - "11434:11434"
+    volumes:
+      - ollama-models:/root/.ollama
+    networks:
+      - agent-net
+    restart: unless-stopped
+    deploy:
+      resources:
+        reservations:
+          memory: 4G
+
+  # ── Virtual Desktop (Ubuntu + VNC + noVNC) ──
+  desktop:
+    build:
+      context: ./desktop
+      dockerfile: Dockerfile
+    container_name: agent-desktop
+    ports:
+      - "5900:5900"   # VNC
+      - "6080:6080"   # noVNC (web browser access)
+      - "8443:8443"   # VS Code (code-server)
+    environment:
+      - DISPLAY=:1
+      - RESOLUTION=1920x1080x24
+      - VNC_PORT=5900
+      - NOVNC_PORT=6080
+    volumes:
+      - workspace:/workspace
+    networks:
+      - agent-net
+    restart: unless-stopped
+    shm_size: "2gb"
+
+volumes:
+  vault-data:
+  screenshots:
+  ollama-models:
+  workspace:
+
+networks:
+  agent-net:
+    driver: bridge
