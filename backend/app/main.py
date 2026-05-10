@@ -40,21 +40,48 @@ ws_handler = WebSocketHandler(stream_manager, task_manager)
 async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     logger.info("Starting AI Agent Platform...")
 
-    await llm.start()
-    await browser.start()
-    await vault.initialize()
-    await stream_manager.start()
-    await orchestrator.start()
+    try:
+        await llm.start()
+        logger.info("LLM client started")
+    except Exception as e:
+        logger.warning("LLM client unavailable (will work without it): %s", e)
 
-    logger.info("All services started")
+    try:
+        await browser.start()
+        logger.info("Browser started")
+    except Exception as e:
+        logger.warning("Browser unavailable (will work without it): %s", e)
+
+    try:
+        await vault.initialize()
+        logger.info("Vault initialized")
+    except Exception as e:
+        logger.warning("Vault unavailable: %s", e)
+
+    try:
+        await stream_manager.start()
+        await orchestrator.start()
+    except Exception as e:
+        logger.warning("Orchestrator/stream partial start: %s", e)
+
+    logger.info("Platform started (some services may be unavailable)")
     yield
 
     logger.info("Shutting down...")
     await orchestrator.stop()
     await stream_manager.stop()
-    await vault.close()
-    await browser.stop()
-    await llm.stop()
+    try:
+        await vault.close()
+    except Exception:
+        pass
+    try:
+        await browser.stop()
+    except Exception:
+        pass
+    try:
+        await llm.stop()
+    except Exception:
+        pass
     logger.info("Shutdown complete")
 
 
